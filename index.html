@@ -1,0 +1,213 @@
+<!DOCTYPE html> 
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Preços - Mercado Livre</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* A light gray background */
+        }
+        /* Custom yellow color similar to Mercado Livre */
+        .bg-ml-yellow {
+            background-color: #FFF159;
+        }
+        .text-ml-blue {
+            color: #3483fa;
+        }
+        /* Spinner animation */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3483fa;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Header -->
+    <header class="bg-ml-yellow shadow-md p-4">
+        <div class="container mx-auto flex items-center justify-between">
+            <h1 class="text-2xl font-bold text-gray-800">Buscador de Preços</h1>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-tag-fill" viewBox="0 0 16 16">
+                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586V2zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+            </svg>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-4 md:p-8">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-3xl mx-auto">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Encontre o melhor preço no Mercado Livre</h2>
+            
+            <!-- Search Form -->
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="product-search" placeholder="Ex: iPhone 15 Pro Max" class="flex-grow p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <button id="search-button" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-md hover:bg-blue-700 transition-all duration-300 ease-in-out flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search mr-2" viewBox="0 0 16 16">
+                        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                    </svg>
+                    Buscar
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Realiza buscas em tempo real utilizando a API oficial do Mercado Livre.</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-container" class="mt-8 max-w-3xl mx-auto">
+            <!-- Loader -->
+            <div id="loader" class="hidden mx-auto loader"></div>
+            <!-- Message Area -->
+            <div id="message" class="hidden text-center text-gray-600 bg-white p-6 rounded-lg shadow-lg"></div>
+            <!-- Results will be injected here -->
+        </div>
+    </main>
+
+    <script>
+        const searchButton = document.getElementById('search-button');
+        const searchInput = document.getElementById('product-search');
+        const resultsContainer = document.getElementById('results-container');
+        const loader = document.getElementById('loader');
+        const messageDiv = document.getElementById('message');
+
+        /**
+         * Fetches product data from the local proxy server.
+         * @param {string} query The product to search for.
+         * @returns {Promise<Array<Object>>} A promise that resolves with product data.
+         */
+        async function fetchProducts(query) {
+            // This URL points to the local server you will create.
+            const serverUrl = `http://localhost:3000/search?q=${encodeURIComponent(query)}`;
+            try {
+                const response = await fetch(serverUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                showMessage("Falha ao buscar produtos. Verifique se o servidor local está rodando.");
+                return []; // Return empty array on failure
+            }
+        }
+
+        /**
+         * Renders the product results on the page.
+         * @param {Array<Object>} products The array of product objects from the API.
+         */
+        function renderResults(products) {
+            // Clear previous results
+            resultsContainer.innerHTML = ''; 
+
+            if (!products || products.length === 0) {
+                showMessage("Nenhum produto encontrado para sua busca.");
+                return;
+            }
+
+            // Sort products by price, lowest first
+            products.sort((a, b) => a.price - b.price);
+
+            products.forEach((product, index) => {
+                const isBestPrice = index === 0;
+                
+                // Format price to Brazilian Real (BRL)
+                const formattedPrice = product.price.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                });
+
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-lg shadow-md p-4 mb-4 flex flex-col sm:flex-row items-center gap-4 transition-transform duration-300 hover:scale-105 ${isBestPrice ? 'border-2 border-green-500' : ''}`;
+
+                let bestPriceBadge = '';
+                if (isBestPrice) {
+                    bestPriceBadge = `
+                        <div class="absolute top-0 right-0 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-bl-lg rounded-tr-md">
+                            MELHOR PREÇO
+                        </div>
+                    `;
+                }
+                
+                // The Mercado Livre API provides thumbnails that use HTTP. We'll replace it with HTTPS.
+                const secureThumbnail = product.thumbnail.replace(/^http:/, 'https:');
+
+                card.innerHTML = `
+                    <div class="relative w-full sm:w-auto">
+                        <img src="${secureThumbnail}" alt="${product.title}" class="w-24 h-24 object-contain rounded-md mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/100x100/cccccc/FFFFFF?text=Imagem';">
+                        ${bestPriceBadge}
+                    </div>
+                    <div class="flex-grow text-center sm:text-left">
+                        <h3 class="font-semibold text-gray-800">${product.title}</h3>
+                        <p class="text-2xl font-bold text-gray-900 mt-1">${formattedPrice}</p>
+                    </div>
+                    <a href="${product.permalink}" target="_blank" rel="noopener noreferrer" class="bg-ml-blue text-white font-bold py-2 px-5 rounded-md hover:bg-blue-700 transition w-full sm:w-auto text-center">
+                        Ver no site
+                    </a>
+                `;
+                resultsContainer.appendChild(card);
+            });
+        }
+
+        /**
+         * Displays a message to the user.
+         * @param {string} text The message to display.
+         */
+        function showMessage(text) {
+            resultsContainer.innerHTML = ''; // Clear results
+            messageDiv.textContent = text;
+            messageDiv.classList.remove('hidden');
+        }
+
+        /**
+         * Hides any displayed message.
+         */
+        function hideMessage() {
+            messageDiv.classList.add('hidden');
+        }
+
+        // --- Event Listeners ---
+        searchButton.addEventListener('click', async () => {
+            const query = searchInput.value.trim();
+            if (!query) {
+                showMessage("Por favor, digite o nome de um produto para buscar.");
+                return;
+            }
+
+            // Reset UI
+            hideMessage();
+            resultsContainer.innerHTML = '';
+            loader.classList.remove('hidden');
+
+            // Fetch and render data
+            const products = await fetchProducts(query);
+            
+            loader.classList.add('hidden');
+            renderResults(products);
+        });
+        
+        // Allow searching by pressing Enter
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                searchButton.click();
+            }
+        });
+
+    </script>
+</body>
+</html>
